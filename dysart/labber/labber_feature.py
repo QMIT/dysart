@@ -56,7 +56,7 @@ class result(exposed):
     is_refresh = True
     exposed = True
     
-    RESERVED_PARAMETERS = ['no_cache']
+    RESERVED_PARAMETERS = ['index', 'no_cache']
 
     def __init__(self, fn: Callable) -> None:
         """This accepts a 'result-granting' function and returns a refresh function
@@ -84,10 +84,10 @@ class result(exposed):
         def wrapped_fn(*args, **kwargs):
             feature = args[0]  # TODO: is this good practice?
 
-            # Select result number
-            index = kwargs.get('index', -1)
+            # Select result number. Don't forward it to fn
+            # if this argument is passed!
+            index = kwargs.pop('index', -1)
             # Recompute a value instead of fetching it from cache.
-            # Don't forward it to fn if this argument is passed!
             no_cache = kwargs.pop('no_cache', False)
             
             # Ensure that `results` is long enough.
@@ -99,6 +99,9 @@ class result(exposed):
             if no_cache:
                 # Clear the cache for _all_ results at this index.
                 feature.results[index] = {}
+
+            # This is how we indirectly pass index state to the method
+            feature.log = feature.log_history[index]
 
             try:
                 return feature.results[index][fn.__name__]
@@ -146,24 +149,18 @@ class LogHistory:
 
     def __getitem__(self, index: Union[int, slice])\
             -> "Optional[Union[Labber.LogFile, List[Labber.LogFile]]]":  # not sure of type?
-        # TODO: _really_ think if this is the right way to write this
-        if type(index) == int:
-            if index < 0:
-                return self.__getitem__(len(self) + index)
-            else:
-                log_path = self.log_path(index)
-                if not os.path.isfile(log_path):
-                    raise IndexError('Labber logfile with index {} cannot be found'.format(index))
-                if log_path not in self.log_cache:
-                    log_file = Labber.LogFile(self.log_path(index))
-                    self.log_cache[log_path] = log_file
-                return self.log_cache[log_path]
-
-        elif type(index) == slice:
+        if isinstance(index, int):
+            log_path = self.log_path(index)
+            if not os.path.isfile(log_path):
+                raise IndexError('Labber logfile with index {} cannot be found'.format(index))
+            if log_path not in self.log_cache:
+                log_file = Labber.LogFile(self.log_path(index))
+                self.log_cache[log_path] = log_file
+            return self.log_cache[log_path]
+        elif isinstance(index, slice):
             # TODO is a less naive implementation possible here?
-            # Probably should do some bounds checking, at least.
             # TODO test this, e.g. with slice [:]--it is known not to work.
-            return [self[i] for i in range(index.start, index.stop, index.step)]
+            return [self[i] for i in range(index.start, index.stop, index.step or 1)]
         else:
             raise TypeError
 
