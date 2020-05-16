@@ -214,7 +214,7 @@ class Project:
                 if method_type:
                     fn = types.MethodType(fn, feature)
                 setattr(feature, f"__{hook_type}__", fn)
-        
+
         attach_hook('pre_hook')
         attach_hook('post_hook')
         # I sort of don't like that these hooks in particular have a different
@@ -229,11 +229,11 @@ class Project:
         self.feature_ids[feature_name] = feature_id
         self.features[feature_id] = feature
         feature.ctx = self.features
-    
+
     def feature_graph(self) -> List[Tuple[str, str]]:
         """Returns an edge representation of the dag, labelled by project
         feature names.
-        
+
         Returns: A list of tuples containing all the (parent, child)
         pairs in the graph, by feature name.
 

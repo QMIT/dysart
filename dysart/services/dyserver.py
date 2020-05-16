@@ -15,6 +15,7 @@ TODO
 import base64
 import functools
 import hashlib
+import inspect
 from io import StringIO
 import json
 import os
@@ -152,7 +153,7 @@ class Dyserver(service.Service):
         """Auth for an incoming HTTP request. In the future this will probably
         do some more elaborate three-way handshake; for now, it simply checks
         the incoming IP address against a whitelist.
-        
+
         Args:
             request: 
 
@@ -168,10 +169,10 @@ class Dyserver(service.Service):
         user, token = base64.b64decode(credentials).decode('utf-8').split(':')
         if Dyserver.hashpass(token) not in conf.config['tokens']:
             raise web.HTTPUnauthorized
-    
+
     async def refresh_feature(self, feature, request: RequestRecord):
         """
-        
+
         Args:
             feature: the feature to be refreshed
 
@@ -189,7 +190,7 @@ class Dyserver(service.Service):
                 await scheduled_feature.exec_feature(record)
         except errors.InstrumentNotFoundError as e:
             raise web.HTTPNotImplemented(reason=f"Instrument not found: {e}")
-            
+
     @process_request
     async def feature_get_handler(self, request: RequestRecord):
         """Handles requests that only retrieve data about Features.
@@ -219,7 +220,7 @@ class Dyserver(service.Service):
             raise web.HTTPNotFound(
                 reason=f"Feature {data['feature']} not found"
             )
-        
+
         response_data = feature._repr_dict_()
         response_data['name'] = data['feature']
         return web.Response(body=json.dumps(response_data))
@@ -227,7 +228,7 @@ class Dyserver(service.Service):
     @process_request
     async def feature_post_handler(self, request: RequestRecord):
         """Handles requests that may mutate state.
-        
+
         Args:
             request: request data is expected to have the fields,
             `project`, `feature`, `method`, `args`, and `kwargs`.
@@ -244,7 +245,7 @@ class Dyserver(service.Service):
             raise web.HTTPNotFound(
                 reason=f"Feature {data['feature']} not found"
             )
-        
+
         method = getattr(feature, data['method'], None)
         if not isinstance(method, exposed):
             # This exception will be raised if there is no such method *or* if
@@ -252,12 +253,16 @@ class Dyserver(service.Service):
             raise web.HTTPNotFound(
                 reason=f"Feature {data['feature']} has no method {data['method']}"
             )
-        
+
         if hasattr(method, 'is_refresh'):
             await self.refresh_feature(feature, request)
-        
+
         print(f"Calling method `{data['method']}` of feature `{data['feature']}`")
         return_value = method(*data['args'], **data['kwargs'])
+        # You might get a future back. If you do, wait to unwrap it.
+        if inspect.isawaitable(return_value):
+            return_value = await return_value
+
         return web.Response(body=pickle.dumps(return_value))
 
     @process_request
@@ -273,11 +278,11 @@ class Dyserver(service.Service):
 
         """
         data = request.json
-        
+
         def exposed_method_names(feature_id: str):
             return [m.__name__ for m in
                     self.project.features[feature_id].exposed_methods()]
-            
+
         try:
             print(f"Loading project `{data['project']}`")
             self.load_project(conf.config['projects'][data['project']])
@@ -302,7 +307,7 @@ class Dyserver(service.Service):
         """A handler invoked by a client-side request to transfer control
         of the server process to a debugger. This feature should be disabled
         without admin authentication
-        
+
         Args:
             request: 
 
@@ -313,7 +318,7 @@ class Dyserver(service.Service):
         breakpoint()
         pass  # A reminder that nothing is supposed to happen
         return web.Response()
-    
+
     def setup_routes(self):
         self.app.router.add_post('/feature', self.feature_post_handler)
         self.app.router.add_get('/feature', self.feature_get_handler)
@@ -336,3 +341,4 @@ class LabberContext:
     def _error(self) -> bool:
         """Checks if an error condition is found in temporary I/O buffer"""
         return 'Error' in self.buff.getvalue()
+

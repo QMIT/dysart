@@ -239,7 +239,7 @@ def feature_html_table(repr: dict) -> str:
         for name, val in repr['results'].items():
             table_row(name, val)
         add("</table>")
-    if 'diffs' in repr:
+    if 'diffs' in repr and len(repr['diffs']) >= 1:
         add(f"<h3>Diffs</h3>")
         add("<table>")
         for name, val in repr['diffs'].items():

@@ -172,9 +172,6 @@ class Feature(me.Document):
             record:
 
         Returns:
-            
-        Todo:
-            Propagate `manual_expiration_switch` to children.
 
         """
         record.setup()
@@ -185,6 +182,13 @@ class Feature(me.Document):
             await self.exec_async_dunder('validation_hook', record, return_value)
             self.manual_expiration_switch = False
             self.save()
+
+            # Propagate expiration to children, no matter what. This ensures that,
+            # even if they aren't presently scheduled, the children will be aware
+            # that their parent has expired.
+            for child in self.children:
+                child.set_expired()
+
             record.conclude(CallStatus.DONE)
         except Exception as e:
             record.conclude(CallStatus.FAILED)
@@ -193,7 +197,7 @@ class Feature(me.Document):
         return return_value
 
     @property
-    def parents(self):
+    def parents(self) -> Dict[str, "Feature"]:
         """How parents should be accessed by clients. This property is a mapping
         from parent keys, which identify the relationship, purpose or intent of a
         parent object, to the corresponding parent objects.
@@ -214,6 +218,45 @@ class Feature(me.Document):
         """
         return self.ctx[self.parent_ids[parent_key]]
 
+    @property
+    def children(self) -> List["Feature"]:
+        """Retrieves all features in the project that point to this feature as
+        a parent.
+
+        Returns: the children of this feature.
+
+        Todo:
+            This is an uncareful implementation that takes O(|graph|) time.
+            We don't care about such small overhead for now. This could be
+            "fixed" in two ways: we could run a database query (which will
+            in any case have a larger prefactor), or have each Feature also
+            hold references to each of its children.
+        """
+        return [feature for id, feature in self.ctx.items()
+                if self in feature.parents.values()]
+
+    def expiry_override(self) -> bool:
+        """A hard override function that may be overridden (excuse me) by
+        subclasses to provide additional incontrovertible expiry conditions,
+        such as the absence of an existing measurement result.
+
+        Returns:
+
+        """
+        return self.manual_expiration_switch
+
+    @exposed
+    async def expired(self) -> bool:
+        """Says whether this function has either been flagged expired, or has
+        met the condition declared by its expiration hook.
+
+        Returns: True if expired, False if not.
+
+        """
+        exp_hook_res = (await self.exec_async_dunder('expiration_hook'))
+        exp_hook_expired = exp_hook_res == ExpirationStatus.EXPIRED
+        return exp_hook_expired or self.expiry_override()
+
     async def expired_ancestors(self) -> OrderedDict:
         """Returns a list of ancestors that are expired, in topological-sorted
         order, deduplicated, and possibly including the callee.
@@ -228,28 +271,17 @@ class Feature(me.Document):
             acc.update(ancestors)
 
         # If any parent is expired, or this one has been flagged, schedule this for refresh.
-        expired = (len(acc) > 0)
-        exp_hook_res = (await self.exec_async_dunder('expiration_hook'))
-        expired |= exp_hook_res == ExpirationStatus.EXPIRED
-        expired |= self.expiry_override()
-        if expired:
+        expired = await self.expired()
+        if expired or len(acc) > 0:
             acc[self] = True
         return acc
-    
-    def expiry_override(self) -> bool:
-        """A hard override function that may be overridden (excuse me) by
-        subclasses to provide additional incontrovertible expiry conditions,
-        such as the absence of an existing measurement result.
 
-        Returns:
+    @exposed
+    async def awaiting_refresh(self) -> bool:
+        """Is any of this feature's ancestors (inclusive!) is expired, it is
+        ready to be scheduled for refresh.
 
-        """
-        return self.manual_expiration_switch
-    
-    async def is_expired(self) -> bool:
-        """
-        
-        Returns:
+        Returns: True if awaiting refresh, False otherwise.
 
         """
         return len(await self.expired_ancestors()) > 0
