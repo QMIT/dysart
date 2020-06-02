@@ -55,7 +55,7 @@ class result(exposed):
 
     is_refresh = True
     exposed = True
-    
+
     RESERVED_PARAMETERS = ['index', 'no_cache']
 
     def __init__(self, fn: Callable) -> None:
@@ -89,7 +89,7 @@ class result(exposed):
             index = kwargs.pop('index', -1)
             # Recompute a value instead of fetching it from cache.
             no_cache = kwargs.pop('no_cache', False)
-            
+
             # Ensure that `results` is long enough.
             if index < 0:
                 index = len(feature.log_history) + index
@@ -298,8 +298,11 @@ class LabberFeature(Feature):
             'id': self.id,
         }
         results = self.all_results()
+        # rewrite the values for representation
         for key, val in results.items():
-            if not isinstance(val, numbers.Number):
+            if val is None:
+                results[key] = 'No result'
+            elif not isinstance(val, numbers.Number):
                 results[key] = 'Non-numeric result'
         table['results'] = results
         table['diffs'] = self.template_diffs
@@ -310,7 +313,10 @@ class LabberFeature(Feature):
         computed before."""
         d = {}
         for method in self.result_methods():
-            d[method.__name__] = method(index=index)
+            try:
+                d[method.__name__] = method(index=index)
+            except IndexError:
+                d[method.__name__] = None
         return d
 
     def get_results_history(self, result_name: str):

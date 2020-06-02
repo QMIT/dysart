@@ -2,6 +2,12 @@
 # It is generally accessed through the `config` variable in the `toplevel.conf`
 # module. You should edit this file to suit your deployment.
 
+# Dysart server options If you are running Mongodb as a daemon or Windows
+# service, replace the `start_db` option--which starts a database server as a
+# subprocess--with `db_discover`, which finds a running mongodb process.
+options:
+  - start_db
+
 # The address of the dysart server
 server_host: '127.0.0.1'
 
@@ -33,5 +39,6 @@ labber_data_dir: ~/equs/QMIT/dysart/debug_data/labber
 projects:
   demo: ~/equs/QMIT/dysart/dysart/equs_std/equs_demo.yaml
 
+# Add your token here!
 tokens:
   - "a8072dffff65e5669c3142c21632381e25307bc0"

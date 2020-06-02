@@ -44,7 +44,7 @@ def process_request(coro):
 
     Returns:
         A coroutine function, notionally an HTTP request handler.
-    
+
     Todo:
         Need to figure out how to unwrap the response to persist its body
         in the RequestRecord
@@ -92,7 +92,7 @@ class Dyserver(service.Service):
 
         self.app = web.Application()
         self.setup_routes()
-        
+
     # TODO marked for deletion
     def is_running(self) -> bool:
         return hasattr(self, 'httpd')

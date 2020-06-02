@@ -41,15 +41,13 @@ class Client:
         self.url = f"http://{hostname}:{port}"
         self.verbose = verbose
         try:
-            self.__load_token()
+            self.load_token()
         except (FileNotFoundError, KeyError):
             self.gen_token()
-            self.__load_token()
 
     def project(self, name: str, token: Optional[str] = None) -> "RemoteProject":
         """Loads a project on the server and generates a remote handle to that
         project.
-        
         Args:
             name: The name of the project on the server
             token: An auth token. If passed `None`, uses default token.
@@ -83,21 +81,20 @@ class Client:
 
         """
         token = binascii.hexlify(os.urandom(32)).decode()
+        self._token = token
         os.makedirs(os.path.dirname(self.conf_file), exist_ok=True)
         try:
             with open(self.conf_file, 'r') as f:
-                conf = json.loads(f.read())
+                conf_data = json.loads(f.read())
         except FileNotFoundError:
-            conf = {}
-        conf['token'] = token
+            conf_data = {}
+        conf_data['token'] = self._token
         with open(self.conf_file, 'w') as f:
-            json.dump(conf, f)
-        print("Your token hash is:", self.token_hash,
+            json.dump(conf_data, f)
+        print("Your token hash is:", self.token_hash(),
               "Please put it in the `tokens` field of your Dysart server's config file!",
               sep='\n')
 
-
-    @property
     def token_hash(self) -> str:
         """Returns a token hash that can be placed on the Dysart server to
         recognize this client. By contrast, self._token is the preimage
@@ -108,11 +105,11 @@ class Client:
         """
         return hashlib.sha1(self._token.encode('utf-8')).hexdigest()
 
-    def __load_token(self) -> None:
+    def load_token(self) -> None:
         with open(self.conf_file, 'r') as f:
             conf = json.loads(f.read())
             self._token = conf['token']
-            
+
     def _auth(self) -> Tuple[str, str]:
         """Generates an `auth` argument for requests.
 
@@ -149,7 +146,7 @@ class RemoteProject:
 
     def _repr_svg_(self):
         """Define this to get nice formatting in a Jupyter notebook
-        
+
         Returns:
 
         """
@@ -169,7 +166,7 @@ class RemoteFeature:
         data = {
             'project': self.project.name,
             'feature': self.name,
-        }        
+        }
         response = requests.get(self.url, json=data,
                                 auth=self.project.client._auth())
         response.raise_for_status()
@@ -181,7 +178,7 @@ class RemoteProcedureCall:
     def __init__(self, name: str, feature: RemoteFeature):
         self.name = name
         self.feature = feature
-    
+
     def __call__(self, *args, **kwargs):
         proj = self.feature.project
         data = {
@@ -212,25 +209,24 @@ class RemoteProcedureCall:
 
 def feature_html_table(repr: dict) -> str:
     """
-    
+
     Args:
         repr: A dictionary representation of a Feature's state with keys
         `name`, `id`, and `results`.
-        }
 
     Returns: An HTML string representing the state of the Feature.
 
     """
     html = []
     add = html.append
-    
+
     def table_row(name: str, val: Any):
         if isinstance(val, numbers.Number):
             val_fmt = '{:.5e}'
         else:
             val_fmt = '{}'
         add(f"<tr><td>{name}</td><td>{val_fmt}</td></tr>".format(val))
-    
+
     add(f"<h2>Feature <code>{repr['name']}</code></h2>")
     add(f"<h3>Id: <code>{repr['id']}</code></h3>")
     if 'results' in repr:

@@ -2,7 +2,7 @@
 # can serve as a template for your own project specifications.
 
 # Unique project id (currently unenforced)
-Name: equs_demo
+Name: demo
 
 
 Modules:
@@ -14,7 +14,6 @@ Modules:
   # Hook module files: the dysart/hooks directory is automatically included
   # on the search path, so we only need to give the filename here!
   Hooks:
-    - slack.py
     - hooks.py
     - expiration.py
 
@@ -38,9 +37,6 @@ Features:
     # We can customize the behavior of a Feature by adding hooks. this hook
     # runs after completion of a measurement, sending a message to a specified
     # user ID on Slack.
-    post_hook:
-      name: slack.to_users
-      args: ['XXXXXXXXX']  # a Slack user ID
     expiration_hook:
       name: expiration.always_fresh
 
